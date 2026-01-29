@@ -4,21 +4,24 @@ Modern web application for agricultural monitoring and analysis using satellite 
 
 ## Tech Stack
 
-- **Frontend Framework**: SolidJS 1.9+ with TypeScript
-- **Build Tool**: Vite 6.0
-- **Styling**: TailwindCSS
-- **Maps**: Leaflet
-- **Charts**: Apache ECharts
-- **Routing**: Solid Router
-- **State Management**: SolidJS Signals + Solid Query
+- **Frontend Framework**: SolidJS 1.9.3 with TypeScript 5.7
+- **Build Tool**: Vite 6.0.7
+- **Styling**: TailwindCSS 3.4
+- **Maps**: Leaflet 1.9 & Mapbox GL 3.8
+- **Charts**: Apache ECharts 5.6
+- **Routing**: Solid Router 0.15
+- **State Management**: SolidJS Signals + Tanstack Solid Query 5.66
+- **HTTP Client**: Axios 1.7
 
 ## Features
 
-- 🗺️ **Interactive Map Viewer** - Leaflet-based map with satellite imagery
-- 💬 **AI Chatbot** - Floating chatbot interface for user queries
-- 📊 **Dashboard** - Real-time agricultural monitoring
-- 📈 **Analytics** - Data visualization with charts
-- 📄 **Reports** - Export and share reports
+- 🗺️ **Interactive Map Viewer** - Dual map support (Leaflet & Mapbox GL)
+- 💬 **AI Chatbot** - Floating chatbot interface for user assistance
+- 📊 **Dashboard** - Real-time agricultural monitoring and statistics
+- 📈 **Analytics** - Advanced data visualization with ECharts
+- 📄 **Reports** - Generate and export agricultural reports
+- ⚙️ **Settings** - Customizable application preferences
+- 🌓 **Dark Mode** - Theme switching support
 
 ## Getting Started
 
@@ -34,7 +37,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+Open [http://localhost:5173](http://localhost:5173)
 
 ### Build for Production
 
@@ -52,17 +55,25 @@ npm run preview
 
 ```
 src/
-├── components/          # Reusable components
-│   ├── Sidebar.tsx
-│   ├── FloatingChatbot.tsx
-│   └── MapViewer.tsx
-├── layouts/            # Layout components
-│   └── MainLayout.tsx
-├── pages/             # Page components
-│   └── Dashboard.tsx
-├── App.tsx            # Root component
-├── index.tsx          # Entry point
-└── index.css          # Global styles
+├── components/              # Reusable UI components
+│   ├── Header.tsx           # Top navigation bar
+│   ├── Sidebar.tsx          # Side navigation menu
+│   ├── FloatingChatbot.tsx  # AI chatbot widget
+│   ├── MapViewer.tsx        # Leaflet map component
+│   └── MapBoxViewer.tsx     # Mapbox GL component
+├── context/                 # React context providers
+│   └── ThemeContext.tsx     # Theme management
+├── layouts/                 # Layout wrappers
+│   └── Layout.tsx           # Main app layout
+├── pages/                   # Page components
+│   ├── Dashboard.tsx        # Main dashboard
+│   ├── MapPage.tsx          # Map visualization
+│   ├── Analytics.tsx        # Data analytics
+│   ├── Reports.tsx          # Report generation
+│   └── Settings.tsx         # App settings
+├── App.tsx                  # Root component with routing
+├── index.tsx                # Application entry point
+└── index.css                # Global styles & Tailwind
 ```
 
 ## Features Overview
@@ -71,25 +82,36 @@ src/
 
 - Always accessible via floating button
 - Real-time chat interface
-- Typing indicators
-- Message history
-- Responsive design
+- Typing indicators and message history
+- Expandable/collapsible design
+- Responsive layout
 
 ### Map Viewer
 
-- Leaflet integration
-- Multiple map layers
+- Dual map engine support (Leaflet & Mapbox GL)
+- Multiple map layers and tile providers
 - Custom markers and polygons
-- Interactive controls
-- Legend and overlays
+- Interactive controls and zoom
+- Legend and data overlays
 
 ### Dashboard
 
-- Real-time statistics
-- Region filtering
-- Alert notifications
-- Quick actions
-- Responsive layout
+- Real-time agricultural statistics
+- Region and crop filtering
+- Alert notifications system
+- Quick action buttons
+- Responsive grid layout
+
+### Analytics
+
+- Interactive charts powered by ECharts
+- Data visualization and trends
+- Export capabilities
+- Customizable metrics
+
+## Development
+
+Built with modern web technologies for optimal performance and developer experience. Uses Vite for fast HMR and SolidJS for reactive UI updates.
 
 ## License
 
