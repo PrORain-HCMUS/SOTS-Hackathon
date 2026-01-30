@@ -1,0 +1,30 @@
+# Rust
+/target/
+Cargo.lock
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# ONNX models (too large for git)
+assets/models/*.onnx
+
+# Temporary files
+tmp/
+temp/
+*.tmp
