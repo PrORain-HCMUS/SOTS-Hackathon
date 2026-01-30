@@ -17,17 +17,26 @@ pub enum AppError {
     #[error("Validation error: {0}")]
     Validation(String),
 
+    #[error("Unauthorized error: {0}")]
+    Unauthorized(String),
+
+    #[error("Bad request error: {0}")]
+    BadRequest(String),
+
     #[error("Resource not found: {0}")]
     NotFound(String),
 
     #[error("Internal server error: {0}")]
-    Internal(#[from] anyhow::Error),
+    Internal(String),
 
     #[error("Geometry parsing error: {0}")]
     GeometryParsing(String),
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("Parse error: {0}")]
+    Parse(String),
 }
 
 impl IntoResponse for AppError {
@@ -44,6 +53,12 @@ impl IntoResponse for AppError {
             AppError::Validation(ref msg) => {
                 (StatusCode::BAD_REQUEST, msg.as_str())
             }
+            AppError::Unauthorized(ref msg) => {
+                (StatusCode::UNAUTHORIZED, msg.as_str())
+            }
+            AppError::BadRequest(ref msg) => {
+                (StatusCode::BAD_REQUEST, msg.as_str())
+            }
             AppError::NotFound(ref msg) => {
                 (StatusCode::NOT_FOUND, msg.as_str())
             }
@@ -57,6 +72,9 @@ impl IntoResponse for AppError {
             AppError::Io(ref e) => {
                 tracing::error!("IO error: {:?}", e);
                 (StatusCode::INTERNAL_SERVER_ERROR, "IO error occurred")
+            }
+            AppError::Parse(ref msg) => {
+                (StatusCode::BAD_REQUEST, msg.as_str())
             }
         };
 

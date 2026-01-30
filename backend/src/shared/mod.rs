@@ -4,4 +4,4 @@ pub mod error;
 pub mod utils;
 
 pub use app_state::AppState;
-pub use error::{AppError, AppResult};
+pub use error::AppResult;

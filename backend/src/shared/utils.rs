@@ -5,7 +5,7 @@ use wkt::ToWkt;
 pub fn parse_geojson_to_wkt(geojson_str: &str) -> AppResult<String> {
     let geojson: GeoJson = geojson_str
         .parse()
-        .map_err(|e| AppError::GeometryParsing(format!("Invalid GeoJSON: {}", e)))?;
+        .map_err(|e| AppError::Parse(format!("Invalid GeoJSON: {}", e)))?;
 
     match geojson {
         GeoJson::Geometry(geometry) => {
