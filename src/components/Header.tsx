@@ -9,7 +9,7 @@ const Header: Component = () => {
       <div class="px-6 py-3.5 flex items-center justify-between">
         <div class="flex-1">
           <h1 class="text-xl font-semibold text-space-900 dark:text-white">
-            Son of Sea
+            AgriPulse
           </h1>
           <p class="text-xs text-space-500 dark:text-space-400">Agricultural Intelligence Platform</p>
         </div>

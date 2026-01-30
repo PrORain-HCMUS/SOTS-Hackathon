@@ -1,4 +1,4 @@
-# Son of Sea - Agricultural Intelligence Platform
+# AgriPulse - Agricultural Intelligence Platform
 
 Modern web application for agricultural monitoring and analysis using satellite data.
 

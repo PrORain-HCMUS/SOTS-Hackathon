@@ -181,7 +181,7 @@ const Settings: Component = () => {
               <label class="block text-sm font-medium text-space-900 dark:text-white mb-2">Organization</label>
               <input
                 type="text"
-                value="Son of Sea Agriculture"
+                value="AgriPulse"
                 class="w-full px-4 py-2 bg-space-50 dark:bg-space-900 border border-space-200 dark:border-space-700 rounded-lg text-space-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
             </div>

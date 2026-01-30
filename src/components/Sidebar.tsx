@@ -32,7 +32,7 @@ const Sidebar: Component = () => {
             </div>
             {!collapsed() && (
               <div>
-                <h2 class="text-base font-semibold text-space-900 dark:text-white">Son of Sea</h2>
+                <h2 class="text-base font-semibold text-space-900 dark:text-white">AgriPulse</h2>
                 <p class="text-xs text-space-500 dark:text-space-400">Agricultural Intelligence</p>
               </div>
             )}
