@@ -1,4 +1,4 @@
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use bigdecimal::{BigDecimal, ToPrimitive};
 use std::convert::TryFrom;
 use crate::shared::error::{AppResult, AppError};
@@ -69,35 +69,36 @@ pub async fn save_intrusion_vector(vector: CreateIntrusionVector, db: &PgPool) -
 }
 
 pub async fn get_ndsi_history(farm_id: i64, days: i32, db: &PgPool) -> AppResult<Vec<SalinityLog>> {
-    let logs = sqlx::query!(
+    let rows = sqlx::query(
         r#"
         SELECT id, farm_id, ndsi_value, source, recorded_at
         FROM salinity_logs
         WHERE farm_id = $1 AND recorded_at >= NOW() - INTERVAL '1 day' * $2
         ORDER BY recorded_at DESC
         "#,
-        farm_id,
-        days as f64 
     )
+    .bind(farm_id)
+    .bind(days as f64)
     .fetch_all(db)
     .await?;
 
-    Ok(logs
+    Ok(rows
         .into_iter()
-        .filter_map(|log| {
-            log.ndsi_value.to_f64().map(|ndsi| SalinityLog {
-                id: log.id,
-                farm_id: log.farm_id,
-                ndsi_value: ndsi,
-                source: log.source,
-                recorded_at: log.recorded_at,
+        .filter_map(|row| {
+            let ndsi: BigDecimal = row.get("ndsi_value");
+            ndsi.to_f64().map(|val| SalinityLog {
+                id: row.get("id"),
+                farm_id: row.get("farm_id"),
+                ndsi_value: val,
+                source: row.get("source"),
+                recorded_at: row.get("recorded_at"),
             })
         })
         .collect())
 }
 
 pub async fn get_recent_alerts(farm_id: i64, limit: i64, db: &PgPool) -> AppResult<Vec<Alert>> {
-    let alerts = sqlx::query!(
+    let rows = sqlx::query(
         r#"
         SELECT id, farm_id, severity, message, metadata, detected_at, acknowledged, acknowledged_at
         FROM alerts
@@ -105,34 +106,37 @@ pub async fn get_recent_alerts(farm_id: i64, limit: i64, db: &PgPool) -> AppResu
         ORDER BY detected_at DESC
         LIMIT $2
         "#,
-        farm_id,
-        limit
     )
+    .bind(farm_id)
+    .bind(limit)
     .fetch_all(db)
     .await?;
 
-    Ok(alerts
+    Ok(rows
         .into_iter()
-        .map(|a| Alert {
-            id: a.id,
-            farm_id: a.farm_id,
-            severity: match a.severity.as_str() {
-                "critical" => AlertSeverity::Critical,
-                "high" => AlertSeverity::High,
-                "medium" => AlertSeverity::Medium,
-                _ => AlertSeverity::Low,
-            },
-            message: a.message,
-            metadata: a.metadata,
-            detected_at: a.detected_at,
-            acknowledged: a.acknowledged,
-            acknowledged_at: a.acknowledged_at,
+        .map(|row| {
+            let severity_str: String = row.get("severity");
+            Alert {
+                id: row.get("id"),
+                farm_id: row.get("farm_id"),
+                severity: match severity_str.as_str() {
+                    "critical" => AlertSeverity::Critical,
+                    "high" => AlertSeverity::High,
+                    "medium" => AlertSeverity::Medium,
+                    _ => AlertSeverity::Low,
+                },
+                message: row.get("message"),
+                metadata: row.get("metadata"),
+                detected_at: row.get("detected_at"),
+                acknowledged: row.get("acknowledged"),
+                acknowledged_at: row.get("acknowledged_at"),
+            }
         })
         .collect())
 }
 
 pub async fn get_latest_intrusion_vector(farm_id: i64, db: &PgPool) -> AppResult<Option<IntrusionVector>> {
-    let vector = sqlx::query!(
+    let row = sqlx::query(
         r#"
         SELECT id, farm_id, direction, angle_degrees, magnitude_km, calculated_at
         FROM intrusion_vectors
@@ -140,21 +144,24 @@ pub async fn get_latest_intrusion_vector(farm_id: i64, db: &PgPool) -> AppResult
         ORDER BY calculated_at DESC
         LIMIT 1
         "#,
-        farm_id
     )
+    .bind(farm_id)
     .fetch_optional(db)
     .await?;
 
-    Ok(vector.and_then(|v| {
-        let angle = v.angle_degrees.to_f64()?;
-        let magnitude = v.magnitude_km.to_f64()?;
+    Ok(row.and_then(|row| {
+        let angle_bd: BigDecimal = row.get("angle_degrees");
+        let mag_bd: BigDecimal = row.get("magnitude_km");
+        let angle = angle_bd.to_f64()?;
+        let magnitude = mag_bd.to_f64()?;
+        
         Some(IntrusionVector {
-            id: v.id,
-            farm_id: v.farm_id,
-            direction: v.direction,
+            id: row.get("id"),
+            farm_id: row.get("farm_id"),
+            direction: row.get("direction"),
             angle_degrees: angle,
             magnitude_km: magnitude,
-            calculated_at: v.calculated_at,
+            calculated_at: row.get("calculated_at"),
         })
     }))
 }

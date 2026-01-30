@@ -1,60 +1,61 @@
 # syntax=docker/dockerfile:1.7
-# Static build - fully self-contained, no external dependencies
 
-FROM rust:1.93.0-bookworm AS builder
+############################
+# Stage 1: Builder
+############################
+FROM --platform=$BUILDPLATFORM rust:alpine3.21 AS builder
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    pkg-config \
-    musl-tools \
-    ca-certificates \
-    postgresql-15 \
-    postgresql-contrib-15 \
-    postgresql-15-postgis-3 \
-    && rm -rf /var/lib/apt/lists/*
+COPY --from=tonistiigi/xx:1.6.1 / /
+ARG TARGETPLATFORM
 
-RUN rustup target add x86_64-unknown-linux-musl
+RUN apk add --no-cache clang lld musl-dev git file
+
+RUN xx-apk add --no-cache musl-dev gcc
 
 WORKDIR /app
 
-COPY Cargo.toml Cargo.lock ./
-COPY migrations ./migrations
+ENV RUSTFLAGS="-C target-feature=+crt-static -C link-arg=-static -C target-cpu=generic"
 
-# Build dependencies
+# --- Build Rust App ---
+COPY Cargo.toml Cargo.lock ./
+
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
     mkdir src && \
     echo "fn main() {}" > src/main.rs && \
-    RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-musl && \
-    rm -rf src
+    xx-cargo build --release --locked --bin backend && \
+    rm -rf src target/*/release/backend* target/*/release/deps/backend*
 
 COPY src ./src
+COPY migrations ./migrations
 
-# Start postgres, run migrations, build app
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
-    mkdir -p /var/run/postgresql && \
-    chown postgres:postgres /var/run/postgresql && \
-    su - postgres -c "/usr/lib/postgresql/15/bin/initdb -D /tmp/pgdata" && \
-    su - postgres -c "/usr/lib/postgresql/15/bin/pg_ctl -D /tmp/pgdata -l /tmp/logfile start" && \
-    sleep 2 && \
-    su - postgres -c "createdb bioradar_build" && \
-    su - postgres -c "psql -d bioradar_build -c 'CREATE EXTENSION IF NOT EXISTS postgis;'" && \
-    export DATABASE_URL=postgresql://postgres@localhost:5432/bioradar_build && \
-    cd /app && \
-    cargo install sqlx-cli --no-default-features --features postgres && \
-    sqlx migrate run && \
     touch src/main.rs && \
-    RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --locked --target x86_64-unknown-linux-musl && \
-    strip --strip-all target/x86_64-unknown-linux-musl/release/backend && \
-    su - postgres -c "/usr/lib/postgresql/15/bin/pg_ctl -D /tmp/pgdata stop"
+    xx-cargo build --release --locked --bin backend && \
+    cp target/*/release/backend /tmp/backend && \
+    xx-verify /tmp/backend && \
+    strip --strip-all /tmp/backend
 
+# Create non-root user for scratch image
+RUN echo "appuser:x:10001:10001::/app:/sbin/nologin" >> /etc/passwd && \
+    echo "appgroup:x:10001:" >> /etc/group
+
+############################
+# Stage 2: Minimal scratch runtime
+############################
 FROM scratch
+
+COPY --from=builder /etc/passwd /etc/passwd
+COPY --from=builder /etc/group /etc/group
 
 WORKDIR /app
 
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/backend /app/backend
-COPY --from=builder /app/migrations /app/migrations
+COPY --from=builder /tmp/backend /app/backend
+
+USER 10001:10001
+
+ENV RUST_LOG=info
 
 EXPOSE 8000
 

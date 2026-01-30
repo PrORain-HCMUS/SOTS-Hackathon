@@ -5,6 +5,19 @@ use argon2::{
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use crate::shared::error::AppError;
 use super::models::Claims;
+use std::sync::LazyLock;
+
+static JWT_SECRET: LazyLock<String> = LazyLock::new(|| {
+    std::env::var("JWT_SECRET").expect("JWT_SECRET environment variable not set")
+});
+
+static JWT_ENCODING_KEY: LazyLock<EncodingKey> = LazyLock::new(|| {
+    EncodingKey::from_secret(JWT_SECRET.as_bytes())
+});
+
+static JWT_DECODING_KEY: LazyLock<DecodingKey> = LazyLock::new(|| {
+    DecodingKey::from_secret(JWT_SECRET.as_bytes())
+});
 
 pub fn hash_password(password: &str) -> Result<String, AppError> {
     let salt = SaltString::generate(&mut OsRng);
@@ -25,14 +38,7 @@ pub fn verify_password(password: &str, hash: &str) -> Result<bool, AppError> {
         .is_ok())
 }
 
-fn get_jwt_secret() -> Result<String, AppError> {
-    std::env::var("JWT_SECRET")
-        .map_err(|_| AppError::Internal("JWT_SECRET environment variable not set".to_string()))
-}
-
 pub fn generate_jwt(user_id: i64, email: &str, role: &str) -> Result<String, AppError> {
-    let secret = get_jwt_secret()?;
-    
     let expiration = chrono::Utc::now()
         .checked_add_signed(chrono::Duration::hours(24))
         .ok_or_else(|| AppError::Internal("Failed to calculate expiration".to_string()))?
@@ -45,22 +51,12 @@ pub fn generate_jwt(user_id: i64, email: &str, role: &str) -> Result<String, App
         exp: expiration,
     };
 
-    encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(secret.as_bytes()),
-    )
-    .map_err(|e| AppError::Internal(format!("Token generation failed: {}", e)))
+    encode(&Header::default(), &claims, &JWT_ENCODING_KEY)
+        .map_err(|e| AppError::Internal(format!("Token generation failed: {}", e)))
 }
 
 pub fn validate_jwt(token: &str) -> Result<Claims, AppError> {
-    let secret = get_jwt_secret()?;
-
-    decode::<Claims>(
-        token,
-        &DecodingKey::from_secret(secret.as_bytes()),
-        &Validation::default(),
-    )
-    .map(|data| data.claims)
-    .map_err(|e| AppError::Unauthorized(format!("Invalid token: {}", e)))
+    decode::<Claims>(token, &JWT_DECODING_KEY, &Validation::default())
+        .map(|data| data.claims)
+        .map_err(|e| AppError::Unauthorized(format!("Invalid token: {}", e)))
 }

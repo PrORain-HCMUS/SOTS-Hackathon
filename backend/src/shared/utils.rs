@@ -47,18 +47,18 @@ pub fn calculate_angle_degrees(from: (f64, f64), to: (f64, f64)) -> f64 {
     dy.atan2(dx).to_degrees()
 }
 
-pub fn angle_to_direction(angle_degrees: f64) -> String {
+pub fn angle_to_direction(angle_degrees: f64) -> &'static str {
     let normalized = ((angle_degrees + 360.0) % 360.0) as i32;
     match normalized {
-        337..=360 | 0..=22 => "E".to_string(),
-        23..=67 => "NE".to_string(),
-        68..=112 => "N".to_string(),
-        113..=157 => "NW".to_string(),
-        158..=202 => "W".to_string(),
-        203..=247 => "SW".to_string(),
-        248..=292 => "S".to_string(),
-        293..=336 => "SE".to_string(),
-        _ => "UNKNOWN".to_string(),
+        337..=360 | 0..=22 => "E",
+        23..=67 => "NE",
+        68..=112 => "N",
+        113..=157 => "NW",
+        158..=202 => "W",
+        203..=247 => "SW",
+        248..=292 => "S",
+        293..=336 => "SE",
+        _ => "UNKNOWN",
     }
 }
 
@@ -70,8 +70,11 @@ pub fn calculate_distance_km(from: (f64, f64), to: (f64, f64)) -> f64 {
     let delta_lat = (to.1 - from.1).to_radians();
     let delta_lon = (to.0 - from.0).to_radians();
 
-    let a = (delta_lat / 2.0).sin().powi(2)
-        + lat1.cos() * lat2.cos() * (delta_lon / 2.0).sin().powi(2);
+    let sin_half_dlat = (delta_lat / 2.0).sin();
+    let sin_half_dlon = (delta_lon / 2.0).sin();
+    
+    let a = sin_half_dlat * sin_half_dlat
+        + lat1.cos() * lat2.cos() * sin_half_dlon * sin_half_dlon;
     let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
 
     EARTH_RADIUS_KM * c

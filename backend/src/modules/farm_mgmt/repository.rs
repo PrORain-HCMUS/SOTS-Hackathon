@@ -1,4 +1,4 @@
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use crate::shared::error::AppError;
 use super::models::Farm;
 
@@ -40,7 +40,7 @@ pub async fn get_by_user_with_geojson(
     pool: &PgPool, 
     user_id: i64
 ) -> Result<Vec<(Farm, String)>, AppError> {
-    let rows = sqlx::query!(
+    let rows = sqlx::query(
         r#"
         SELECT 
             f.id, f.user_id, f.name, f.area_hectares, f.created_at, f.updated_at,
@@ -49,22 +49,23 @@ pub async fn get_by_user_with_geojson(
         WHERE f.user_id = $1
         ORDER BY f.created_at DESC
         "#,
-        user_id
     )
+    .bind(user_id)
     .fetch_all(pool)
     .await?;
 
     rows.into_iter()
         .map(|row| {
             let farm = Farm {
-                id: row.id,
-                user_id: row.user_id,
-                name: row.name,
-                area_hectares: row.area_hectares,
-                created_at: row.created_at,
-                updated_at: row.updated_at,
+                id: row.get("id"),
+                user_id: row.get("user_id"),
+                name: row.get("name"),
+                area_hectares: row.get("area_hectares"),
+                created_at: row.get("created_at"),
+                updated_at: row.get("updated_at"),
             };
-            Ok((farm, row.geojson.unwrap_or_else(|| "{}".to_string())))
+            let geojson: Option<String> = row.get("geojson");
+            Ok((farm, geojson.unwrap_or_else(|| "{}".to_string())))
         })
         .collect()
 }

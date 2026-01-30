@@ -15,75 +15,65 @@ pub fn preprocess_image(
             image::imageops::FilterType::Lanczos3,
         );
 
-    let img_rgb = img.to_rgb8();
-    let (width, height) = (config.img_size, config.img_size);
+    let width = img.width() as usize;
+    let height = img.height() as usize;
+    let raw_pixels = img.into_rgb8().into_raw();
     
-    let total_size = config.num_frames * config.in_chans * height * width;
-    let mut pixel_data = Vec::with_capacity(total_size);
-
-    for _ in 0..config.num_frames {
-        for c in 0..config.in_chans {
-            let channel_idx = c % 3;
-            for y in 0..height {
-                for x in 0..width {
-                    let value = img_rgb.get_pixel(x as u32, y as u32)[channel_idx] as f32;
-                    pixel_data.push(value);
-                }
-            }
-        }
-    }
-
+    // Convert to f32 and create tensor (H, W, 3)
+    let data_f32: Vec<f32> = raw_pixels.into_iter().map(|v| v as f32).collect();
     let tensor = Tensor::from_vec(
-        pixel_data,
-        (1, config.num_frames, config.in_chans, height, width),
+        data_f32,
+        (height, width, 3),
         device,
     ).map_err(|e| AppError::AiEngine(format!("Failed to create tensor: {}", e)))?;
+
+    // Permute to (3, H, W)
+    let tensor = tensor
+        .permute((2, 0, 1))
+        .map_err(|e| AppError::AiEngine(format!("Permute failed: {}", e)))?;
+
+    // Reshape to (1, 1, 3, H, W) and repeat to (1, Frames, 3, H, W)
+    let tensor = tensor
+        .unsqueeze(0)
+        .map_err(|e| AppError::AiEngine(format!("Unsqueeze failed: {}", e)))?
+        .unsqueeze(0)
+        .map_err(|e| AppError::AiEngine(format!("Unsqueeze failed: {}", e)))?
+        .repeat((1, config.num_frames, 1, 1, 1))
+        .map_err(|e| AppError::AiEngine(format!("Repeat failed: {}", e)))?;
 
     normalize_tensor(&tensor, config)
 }
 
 fn normalize_tensor(tensor: &Tensor, config: &ModelConfig) -> AppResult<Tensor> {
-    let means = &config.img_norm_cfg.means;
-    let stds = &config.img_norm_cfg.stds;
+    let means_val: Vec<f32> = config.img_norm_cfg.means.iter().map(|&x| x as f32).collect();
+    let stds_val: Vec<f32> = config.img_norm_cfg.stds.iter().map(|&x| x as f32).collect();
+    
     let num_channels = config.num_frames * config.in_chans;
     
-    if means.len() != num_channels || stds.len() != num_channels {
+    if means_val.len() != num_channels || stds_val.len() != num_channels {
         return Err(AppError::AiEngine(format!(
             "Normalization parameters mismatch: expected {}, got means={}, stds={}",
-            num_channels, means.len(), stds.len()
+            num_channels, means_val.len(), stds_val.len()
         )));
     }
 
-    let shape = tensor.dims();
-    let (batch, frames, channels, height, width) = 
-        (shape[0], shape[1], shape[2], shape[3], shape[4]);
+    // Reshape means/stds for broadcasting: (1, Frames, Channels, 1, 1)
+    // NOTE: config.in_chans should be 3 for RGB. 
+    // The previous code assumed flattening: idx = f * channels + c
+    // So distinct params per frame/channel.
+    
+    let stats_shape = (1, config.num_frames, config.in_chans, 1, 1);
+    
+    let means = Tensor::from_vec(means_val, stats_shape, tensor.device())
+        .map_err(|e| AppError::AiEngine(format!("Means tensor failed: {}", e)))?;
+        
+    let stds = Tensor::from_vec(stds_val, stats_shape, tensor.device())
+        .map_err(|e| AppError::AiEngine(format!("Stds tensor failed: {}", e)))?;
 
-    let tensor_data = tensor
-        .flatten_all()
-        .map_err(|e| AppError::AiEngine(format!("Flatten failed: {}", e)))?
-        .to_vec1::<f32>()
-        .map_err(|e| AppError::AiEngine(format!("Vec conversion failed: {}", e)))?;
-
-    let mut normalized_data = Vec::with_capacity(tensor_data.len());
-
-    for b in 0..batch {
-        for f in 0..frames {
-            for c in 0..channels {
-                let idx = f * channels + c;
-                let (mean, std) = (means[idx] as f32, stds[idx] as f32);
-
-                for h in 0..height {
-                    for w in 0..width {
-                        let data_idx = (((b * frames + f) * channels + c) * height + h) * width + w;
-                        normalized_data.push((tensor_data[data_idx] - mean) / std);
-                    }
-                }
-            }
-        }
-    }
-
-    Tensor::from_vec(normalized_data, shape, tensor.device())
-        .map_err(|e| AppError::AiEngine(format!("Tensor creation failed: {}", e)))
+    tensor
+        .broadcast_sub(&means)
+        .and_then(|t| t.broadcast_div(&stds))
+        .map_err(|e| AppError::AiEngine(format!("Normalization failed: {}", e)))
 }
 
 pub fn postprocess_segmentation(
@@ -104,15 +94,18 @@ pub fn postprocess_segmentation(
         .and_then(|t| t.to_vec1::<u32>())
         .map_err(|e| AppError::AiEngine(format!("Postprocess failed: {}", e)))?;
 
+    let water_class = water_class_idx as u32;
+    // let width_f64 = width as f64; // Removed unused variable
+    
     Ok(mask_data
         .iter()
         .enumerate()
         .filter_map(|(idx, &class)| {
-            if class == water_class_idx as u32 {
-                Some(((idx % width) as f64, (idx / width) as f64))
-            } else {
-                None
-            }
+            (class == water_class).then(|| {
+                let x = (idx % width) as f64;
+                let y = (idx / width) as f64;
+                (x, y)
+            })
         })
         .collect())
 }

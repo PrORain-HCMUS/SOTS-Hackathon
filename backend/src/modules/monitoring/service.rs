@@ -17,12 +17,12 @@ pub async fn detect_salinity_anomaly(farm_id: i64, db: &PgPool) -> AppResult<Opt
 
     let current_ndsi = history[0].ndsi_value;
 
-    let (moving_avg, std_dev) = calculate_stats(
-        &history[1..=MOVING_AVERAGE_WINDOW]
-            .iter()
-            .map(|h| h.ndsi_value)
-            .collect::<Vec<_>>()
-    );
+    let ndsi_values: Vec<f64> = history[1..=MOVING_AVERAGE_WINDOW]
+        .iter()
+        .map(|h| h.ndsi_value)
+        .collect();
+    
+    let (moving_avg, std_dev) = calculate_stats(&ndsi_values);
 
     let threshold = moving_avg + (ANOMALY_THRESHOLD_MULTIPLIER * std_dev);
 
@@ -88,7 +88,7 @@ pub async fn calculate_intrusion_vector(
 
     let vector = CreateIntrusionVector {
         farm_id,
-        direction: direction.clone(),
+        direction: direction.to_string(),
         angle_degrees: angle,
         magnitude_km: magnitude,
     };
@@ -98,7 +98,7 @@ pub async fn calculate_intrusion_vector(
     Ok(Some(IntrusionVector {
         id: vector_id,
         farm_id,
-        direction,
+        direction: direction.to_string(),
         angle_degrees: angle,
         magnitude_km: magnitude,
         calculated_at: chrono::Utc::now(),
@@ -126,13 +126,16 @@ fn calculate_stats(values: &[f64]) -> (f64, f64) {
         return (0.0, 0.0);
     }
     
-    let sum: f64 = values.iter().sum();
-    let mean = sum / values.len() as f64;
+    let n = values.len() as f64;
+    let mean = values.iter().sum::<f64>() / n;
     
-    let variance: f64 = values
+    let variance = values
         .iter()
-        .map(|v| (v - mean).powi(2))
-        .sum::<f64>() / values.len() as f64;
+        .map(|&v| {
+            let diff = v - mean;
+            diff * diff
+        })
+        .sum::<f64>() / n;
     
     (mean, variance.sqrt())
 }
