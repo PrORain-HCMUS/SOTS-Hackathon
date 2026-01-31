@@ -13,6 +13,10 @@ impl AppState {
         Self { db, ai_engine: None }
     }
 
+    pub fn db(&self) -> &PgPool {
+        &self.db
+    }
+
     pub fn with_ai_engine(mut self, engine: AiEngine) -> Self {
         self.ai_engine = Some(Arc::new(engine));
         self

@@ -3,3 +3,7 @@
 **/__pycache__
 **/target
 **/.env
+
+data_mask/
+tests/
+backend/scripts/

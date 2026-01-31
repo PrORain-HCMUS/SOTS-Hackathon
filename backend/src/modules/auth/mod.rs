@@ -11,5 +11,9 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/register", post(controller::register))
         .route("/login", post(controller::login))
+}
+
+pub fn protected_router() -> Router<AppState> {
+    Router::new()
         .route("/profile", get(controller::get_profile))
 }

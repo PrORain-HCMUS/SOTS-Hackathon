@@ -1,5 +1,8 @@
-import { Component, createSignal, For } from 'solid-js';
+import { Component, createSignal, For, onMount, Show } from 'solid-js';
+import { useNavigate } from '@solidjs/router';
 import Layout from '../layouts/Layout.tsx';
+import { useAuth } from '../context/AuthContext';
+import { analyticsService, type AnalyticsKPIs, type RegionalMetric } from '../services/analytics';
 // Importing specific Lucide icons from solid-icons
 import { 
   OcGraph2, 
@@ -17,14 +20,44 @@ import {
 } from 'solid-icons/io';
 
 const Analytics: Component = () => {
+  const auth = useAuth();
+  const navigate = useNavigate();
+  
   const [timeRange, setTimeRange] = createSignal('7d');
+  const [kpis, setKpis] = createSignal<AnalyticsKPIs | null>(null);
+  const [regionalMetrics, setRegionalMetrics] = createSignal<RegionalMetric[]>([]);
+  const [isLoading, setIsLoading] = createSignal(true);
+  const [error, setError] = createSignal('');
 
-  const tableData = [
-    { region: 'An Giang', area: '425,000', yield: '6.8', efficiency: '96.2%', status: 'Excellent', color: 'green' },
-    { region: 'Đồng Tháp', area: '385,000', yield: '6.5', efficiency: '93.8%', status: 'Good', color: 'green' },
-    { region: 'Cần Thơ', area: '298,000', yield: '6.2', efficiency: '91.5%', status: 'Fair', color: 'yellow' },
-    { region: 'Long An', area: '265,000', yield: '5.9', efficiency: '88.3%', status: 'Needs Attention', color: 'red' },
-  ];
+  const loadData = async () => {
+    if (!auth.isAuthenticated()) {
+      navigate('/login');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const [kpisData, metricsData] = await Promise.all([
+        analyticsService.getKPIs(timeRange()),
+        analyticsService.getRegionalMetrics()
+      ]);
+      setKpis(kpisData);
+      setRegionalMetrics(metricsData);
+      setError('');
+    } catch (err: any) {
+      console.error('Failed to load analytics:', err);
+      setError(err.error || 'Failed to load data');
+      if (err.status === 401) {
+        auth.logout();
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  onMount(() => {
+    loadData();
+  });
 
   return (
     <Layout>
@@ -48,49 +81,61 @@ const Analytics: Component = () => {
           </select>
         </div>
 
+        {/* Loading State */}
+        <Show when={isLoading()}>
+          <div class="flex items-center justify-center py-12">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          </div>
+        </Show>
+
+        {/* Error State */}
+        <Show when={error() && !isLoading()}>
+          <div class="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-lg p-4">
+            <p class="text-rose-600 dark:text-rose-400">{error()}</p>
+          </div>
+        </Show>
+
         {/* KPI Cards */}
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Total Yield */}
-          <KPICard 
-            title="Total Yield" 
-            value="17,650" 
-            unit="tons" 
-            trend="12.3%" 
-            up={true} 
-            icon={<OcGraph2 size={20} class="text-blue-600" />} 
-            color="blue" 
-          />
-          {/* Efficiency */}
-          <KPICard 
-            title="Efficiency Rate" 
-            value="94.2" 
-            unit="%" 
-            trend="5.1%" 
-            up={true} 
-            icon={<OcComment2 size={20} class="text-green-600" />} 
-            color="green" 
-          />
-          {/* Water Usage */}
-          <KPICard 
-            title="Water Usage" 
-            value="2.3M" 
-            unit="L" 
-            trend="8.4%" 
-            up={false} 
-            icon={<IoWaterOutline size={20} class="text-amber-600" />} 
-            color="amber" 
-          />
-          {/* Cost */}
-          <KPICard 
-            title="Cost per Hectare" 
-            value="$4,250" 
-            unit="" 
-            trend="3.2%" 
-            up={false} 
-            icon={<IoCashOutline size={20} class="text-purple-600" />} 
-            color="purple" 
-          />
-        </div>
+        <Show when={!isLoading() && kpis()}>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <KPICard 
+              title={kpis()!.total_yield.title}
+              value={kpis()!.total_yield.value}
+              unit={kpis()!.total_yield.unit}
+              trend={kpis()!.total_yield.trend}
+              up={kpis()!.total_yield.trend_up}
+              icon={<OcGraph2 size={20} class="text-blue-600" />}
+              color="blue"
+            />
+            <KPICard 
+              title={kpis()!.efficiency_rate.title}
+              value={kpis()!.efficiency_rate.value}
+              unit={kpis()!.efficiency_rate.unit}
+              trend={kpis()!.efficiency_rate.trend}
+              up={kpis()!.efficiency_rate.trend_up}
+              icon={<OcComment2 size={20} class="text-green-600" />}
+              color="green"
+            />
+            <KPICard 
+              title={kpis()!.water_usage.title}
+              value={kpis()!.water_usage.value}
+              unit={kpis()!.water_usage.unit}
+              trend={kpis()!.water_usage.trend}
+              up={kpis()!.water_usage.trend_up}
+              icon={<IoWaterOutline size={20} class="text-amber-600" />}
+              color="amber"
+            />
+            <KPICard 
+              title={kpis()!.cost_per_hectare.title}
+              value={kpis()!.cost_per_hectare.value}
+              unit={kpis()!.cost_per_hectare.unit}
+              trend={kpis()!.cost_per_hectare.trend}
+              up={kpis()!.cost_per_hectare.trend_up}
+              icon={<IoCashOutline size={20} class="text-purple-600" />}
+              color="purple"
+            />
+          </div>
+        </Show>
 
         {/* Charts Section */}
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -115,22 +160,30 @@ const Analytics: Component = () => {
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
-                <For each={tableData}>
-                  {(item) => (
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-900/30 transition-colors">
-                      <td class="px-6 py-4 text-sm font-medium text-slate-900 dark:text-white">{item.region}</td>
-                      <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{item.area}</td>
-                      <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{item.yield}</td>
-                      <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{item.efficiency}</td>
-                      <td class="px-6 py-4">
-                        <span class={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-${item.color}-100 text-${item.color}-800 dark:bg-${item.color}-900/30 dark:text-${item.color}-400`}>
-                          {item.color === 'red' ? <IoAlertCircleOutline  size={12} /> : <OcCheckcircle2 size={12} />}
-                          {item.status}
-                        </span>
-                      </td>
-                    </tr>
-                  )}
-                </For>
+                <Show when={!isLoading() && regionalMetrics().length > 0} fallback={
+                  <tr>
+                    <td colspan="5" class="px-6 py-8 text-center text-slate-500">
+                      No regional data available
+                    </td>
+                  </tr>
+                }>
+                  <For each={regionalMetrics()}>
+                    {(item) => (
+                      <tr class="hover:bg-slate-50 dark:hover:bg-slate-900/30 transition-colors">
+                        <td class="px-6 py-4 text-sm font-medium text-slate-900 dark:text-white">{item.region}</td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{item.area}</td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{item.yield_per_hectare}</td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{item.efficiency}</td>
+                        <td class="px-6 py-4">
+                          <span class={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-${item.status_color}-100 text-${item.status_color}-800 dark:bg-${item.status_color}-900/30 dark:text-${item.status_color}-400`}>
+                            {item.status_color === 'red' ? <IoAlertCircleOutline size={12} /> : <OcCheckcircle2 size={12} />}
+                            {item.status}
+                          </span>
+                        </td>
+                      </tr>
+                    )}
+                  </For>
+                </Show>
               </tbody>
             </table>
           </div>

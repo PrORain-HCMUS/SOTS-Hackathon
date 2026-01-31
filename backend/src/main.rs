@@ -1,11 +1,38 @@
 mod shared;
 mod modules;
 
-use axum::{Router, http::Method, middleware};
+use axum::{Router, http::Method, middleware, Json, routing::get};
 use tower_http::cors::{CorsLayer, Any};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use std::net::SocketAddr;
 use modules::monitoring::ai::engine::AiEngine;
+use serde_json::json;
+
+async fn health_check() -> Json<serde_json::Value> {
+    Json(json!({
+        "status": "healthy",
+        "service": "Bio-Radar Backend",
+        "version": "0.1.0"
+    }))
+}
+
+async fn root_handler() -> Json<serde_json::Value> {
+    Json(json!({
+        "message": "Bio-Radar Backend API",
+        "version": "0.1.0",
+        "endpoints": {
+            "auth": "/api/auth",
+            "dashboard": "/api/dashboard",
+            "analytics": "/api/analytics",
+            "monitoring": "/api/monitoring",
+            "farms": "/api/farms",
+            "reports": "/api/reports",
+            "settings": "/api/settings",
+            "satellites": "/api/satellites",
+            "health": "/health"
+        }
+    }))
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -52,14 +79,27 @@ async fn main() -> anyhow::Result<()> {
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
         .allow_headers(Any);
 
-    let app = Router::new()
-        .nest("/api/auth", modules::auth_router())
+    // Protected routes that require authentication
+    let protected_routes = Router::new()
+        .nest("/api/auth", modules::auth_protected_router())
+        .nest("/api/dashboard", modules::dashboard_router())
+        .nest("/api/analytics", modules::analytics_router())
         .nest("/api/monitoring", modules::monitoring_router())
         .nest("/api/farms", modules::farm_mgmt_router())
+        .nest("/api/reports", modules::reports_router())
+        .nest("/api/settings", modules::settings_router())
+        .nest("/api/satellites", modules::satellites_router())
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             modules::auth::middleware::auth_middleware
-        ))
+        ));
+
+    // Public routes (no auth required)
+    let app = Router::new()
+        .route("/", get(root_handler))
+        .route("/health", get(health_check))
+        .nest("/api/auth", modules::auth_router())
+        .merge(protected_routes)
         .layer(cors)
         .with_state(state);
 
